@@ -168,6 +168,8 @@ class Shadow():
         return window
 
     def render(self, dt):
+        glfw.make_context_current(self.window)
+
         # Render shader background animation to framebuffer with less quality if set
         gl.glViewport(0, 0, int(self.width * Config.QUALITY), int(self.height * Config.QUALITY))
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.fbo)

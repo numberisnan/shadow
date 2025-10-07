@@ -8,6 +8,7 @@ from .shadow import *
 import logging
 import argparse
 import sys
+import functools
 import glfw
 
 log = logging.getLogger(__name__)
@@ -23,9 +24,12 @@ def parse_argument_monitor(select):
     if select != None:
         monitors = get_monitors()
 
+        if select == "all":
+            return monitors
+
         for monitor in monitors:
             if monitor.name != None and monitor.name.lower() == select.lower():
-                return monitor
+                return [monitor]
 
         print("Please select one of the following monitors:")
 
@@ -34,7 +38,7 @@ def parse_argument_monitor(select):
 
         sys.exit(0)
 
-    return get_default_monitor()
+    return [get_default_monitor()]
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
@@ -69,7 +73,8 @@ def main():
     Config.FRAMELIMIT = args["framelimit"]
     Config.QUALITY_MODE = args["qualitymode"]
 
-    monitor = parse_argument_monitor(Config.DISPLAY)
+    monitors = parse_argument_monitor(Config.DISPLAY)
+    log.debug("Using monitors: {}".format(monitors))
     frameLimiter = FrameLimiter(Config.FRAMELIMIT)
 
     if not sys.platform.startswith("linux") and (Config.BACKGROUND_MODE == BackgroundMode.BACKGROUND or Config.BACKGROUND_MODE == BackgroundMode.ROOT):
@@ -81,26 +86,33 @@ def main():
         print("This mode is only supported by windows.")
         return
 
-    show = None
-    if Config.BACKGROUND_MODE == BackgroundMode.BACKGROUND:
-        show = ShadowBackground(monitor, files)
-    elif Config.BACKGROUND_MODE == BackgroundMode.WIN10:
-        show = ShadowWin10(monitor, files)
-    elif Config.BACKGROUND_MODE == BackgroundMode.ROOT:
-        show = ShadowRoot(monitor, files)
-    elif Config.BACKGROUND_MODE == BackgroundMode.WINDOW:
-        show = ShadowWindow(monitor, files, int(args["width"]), int(args["height"]))
+    shows = []
+    for monitor in monitors:
+        if Config.BACKGROUND_MODE == BackgroundMode.BACKGROUND:
+            show = ShadowBackground(monitor, files)
+            shows.append(show)
+        elif Config.BACKGROUND_MODE == BackgroundMode.WIN10:
+            show = ShadowWin10(monitor, files)
+            shows.append(show)
+        elif Config.BACKGROUND_MODE == BackgroundMode.ROOT:
+            show = ShadowRoot(monitor, files)
+            shows.append(show)
+        elif Config.BACKGROUND_MODE == BackgroundMode.WINDOW:
+            show = ShadowWindow(monitor, files, int(args["width"]), int(args["height"]))
+            shows.append(show)
 
     # this if should never be true
-    if show == None:
+    if len(shows) == 0:
         all_args.print_help()
         return
 
+    
     try:
-        while show.is_running():
+        while functools.reduce(lambda a, b: a and b.is_running(), shows, True): # While all shows are running
             dt = frameLimiter.tick()
-            show.render(dt * Config.SPEED)
-            show.swap()
+            for show in shows:
+                show.render(dt * Config.SPEED)
+                show.swap()
     except KeyboardInterrupt:
         log.debug("Exit signal received")
 
